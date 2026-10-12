@@ -131,7 +131,8 @@ class _GameViewState extends ConsumerState<GameView>
         _shatterKey.currentState?.triggerShatter(
           clearingRows: next.clearingRows,
           clearingCols: next.clearingCols,
-          board: prev?.board ?? next.board,
+          clearingCells: next.clearingCells,
+          board: next.board,
         );
         _calloutKey.currentState?.triggerCallout(
           clearedLines: next.lastClearedLines,
@@ -250,6 +251,7 @@ class _GameViewState extends ConsumerState<GameView>
     final Set<String> previewCells = {};
     final Set<int> glowingRows = {};
     final Set<int> glowingCols = {};
+    final Set<int> glowingCells = {};
 
     if (activePiece != null &&
         _hoveredStartRow != null &&
@@ -283,12 +285,19 @@ class _GameViewState extends ConsumerState<GameView>
         for (int r = 0; r < activePiece.rows; r++) {
           for (int c = 0; c < activePiece.cols; c++) {
             if (activePiece.matrix[r][c] == 1) {
-              simulatedBoard[_hoveredStartRow! + r][_hoveredStartCol! + c] = 1;
+              simulatedBoard[_hoveredStartRow! + r][_hoveredStartCol! + c] =
+                  state.isRandomMode ? activeColorIndex + 1 : 1;
             }
           }
         }
-        glowingRows.addAll(BlockBlastRules.getCompletedRows(simulatedBoard));
-        glowingCols.addAll(BlockBlastRules.getCompletedCols(simulatedBoard));
+        if (state.isRandomMode) {
+          glowingCells.addAll(
+            BlockBlastRules.findColorMatches(simulatedBoard).cells,
+          );
+        } else {
+          glowingRows.addAll(BlockBlastRules.getCompletedRows(simulatedBoard));
+          glowingCols.addAll(BlockBlastRules.getCompletedCols(simulatedBoard));
+        }
       }
     }
 
@@ -368,7 +377,8 @@ class _GameViewState extends ConsumerState<GameView>
                               );
                               final isLineGlowing =
                                   glowingRows.contains(r) ||
-                                  glowingCols.contains(c);
+                                  glowingCols.contains(c) ||
+                                  glowingCells.contains(r * level.gridSize + c);
 
                               Widget cellWidget;
 
@@ -388,7 +398,10 @@ class _GameViewState extends ConsumerState<GameView>
                                 }
                                 final isClearing =
                                     state.clearingRows.contains(r) ||
-                                    state.clearingCols.contains(c);
+                                    state.clearingCols.contains(c) ||
+                                    state.clearingCells.contains(
+                                      r * level.gridSize + c,
+                                    );
                                 final isJustPlaced =
                                     state.isAnimating && !isClearing;
 
@@ -1259,6 +1272,7 @@ class _ShatterParticleOverlayState extends State<ShatterParticleOverlay>
   void triggerShatter({
     required Set<int> clearingRows,
     required Set<int> clearingCols,
+    Set<int> clearingCells = const {},
     required List<List<int>> board,
   }) {
     _fragments.clear();
@@ -1266,7 +1280,9 @@ class _ShatterParticleOverlayState extends State<ShatterParticleOverlay>
 
     for (int r = 0; r < N; r++) {
       for (int c = 0; c < N; c++) {
-        if (clearingRows.contains(r) || clearingCols.contains(c)) {
+        if (clearingRows.contains(r) ||
+            clearingCols.contains(c) ||
+            clearingCells.contains(r * N + c)) {
           final cellVal = board[r][c];
           final color = cellVal > 0
               ? AppColors.blockColors[(cellVal - 1) %
