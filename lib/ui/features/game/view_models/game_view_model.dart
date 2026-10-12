@@ -29,6 +29,7 @@ class GameViewModelState {
 
   final Set<int> clearingRows;
   final Set<int> clearingCols;
+  final Set<int> clearingCells; // match-3 cells (row * N + col)
   final bool isAnimating;
 
   GameViewModelState({
@@ -51,6 +52,7 @@ class GameViewModelState {
     this.lastMoveScore = 0,
     this.clearingRows = const {},
     this.clearingCols = const {},
+    this.clearingCells = const {},
     this.isAnimating = false,
     this.highestScore = 0,
   });
@@ -75,6 +77,7 @@ class GameViewModelState {
     int? lastMoveScore,
     Set<int>? clearingRows,
     Set<int>? clearingCols,
+    Set<int>? clearingCells,
     bool? isAnimating,
     int? highestScore,
   }) {
@@ -98,6 +101,7 @@ class GameViewModelState {
       lastMoveScore: lastMoveScore ?? this.lastMoveScore,
       clearingRows: clearingRows ?? this.clearingRows,
       clearingCols: clearingCols ?? this.clearingCols,
+      clearingCells: clearingCells ?? this.clearingCells,
       isAnimating: isAnimating ?? this.isAnimating,
       highestScore: highestScore ?? this.highestScore,
     );
@@ -222,10 +226,19 @@ class GameViewModel extends StateNotifier<GameViewModelState> {
       }
     }
 
-    final completedRows = BlockBlastRules.getCompletedRows(newBoard);
-    final completedCols = BlockBlastRules.getCompletedCols(newBoard);
+    // Endless mode: match 3+ same-colored blocks. Campaign: full rows/columns.
+    final isMatchMode = state.isRandomMode;
+    final matchResult = isMatchMode
+        ? BlockBlastRules.findColorMatches(newBoard)
+        : const MatchResult({}, 0);
+    final completedRows =
+        isMatchMode ? <int>[] : BlockBlastRules.getCompletedRows(newBoard);
+    final completedCols =
+        isMatchMode ? <int>[] : BlockBlastRules.getCompletedCols(newBoard);
 
-    final clearedLines = completedRows.length + completedCols.length;
+    final clearedLines = isMatchMode
+        ? matchResult.runCount
+        : completedRows.length + completedCols.length;
     int currentCombo = state.comboCount;
 
     if (clearedLines > 0) {
@@ -264,6 +277,7 @@ class GameViewModel extends StateNotifier<GameViewModelState> {
         lastMoveScore: moveScore,
         clearingRows: completedRows.toSet(),
         clearingCols: completedCols.toSet(),
+        clearingCells: matchResult.cells,
         isAnimating: true,
       );
 
@@ -274,6 +288,11 @@ class GameViewModel extends StateNotifier<GameViewModelState> {
         );
 
         int extraGemBonus = 0;
+
+        final n = clearedBoard.length;
+        for (final id in matchResult.cells) {
+          clearedBoard[id ~/ n][id % n] = 0;
+        }
 
         for (final r in completedRows) {
           for (int c = 0; c < clearedBoard.length; c++) {
@@ -345,6 +364,7 @@ class GameViewModel extends StateNotifier<GameViewModelState> {
           isGameOver: isGameOver,
           clearingRows: const {},
           clearingCols: const {},
+          clearingCells: const {},
           isAnimating: false,
         );
       });
